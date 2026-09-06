@@ -43,6 +43,11 @@ def _conditional_weather_followup_response(user_text: str, history_text: str) ->
         token in user_lower
         for token in ("weather", "nice", "sunny", "rain", "picnic", "forecast", "suitable", "if not", "otherwise")
     )
+    is_schedule_listing_request = (
+        "list" in user_lower or "show" in user_lower or "what" in user_lower
+    ) and (
+        "scheduled" in user_lower or "schedule" in user_lower or "events" in user_lower or "tasks" in user_lower or "todo" in user_lower
+    )
     has_own_weekday = any(
         day in user_lower
         for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "today", "tomorrow")
@@ -50,9 +55,8 @@ def _conditional_weather_followup_response(user_text: str, history_text: str) ->
     has_own_specific_time = re.search(r"\b(1[0-2]|0?[1-9])\s*(:\d{2})?\s*(am|pm)\b", user_lower) is not None
     is_complete_unrelated_request = (
         not mentions_weather_or_conditional
-        and has_own_weekday
-        and has_own_specific_time
-        and len(user_lower.split()) >= 6  # long enough to be a full request, not a short partial answer
+        and (is_schedule_listing_request or (has_own_weekday and has_own_specific_time))
+        and len(user_lower.split()) >= 3
     )
     if is_complete_unrelated_request:
         return None
@@ -915,7 +919,7 @@ def _plan_node_impl(state: AssistantState) -> dict:
         # Classify complexity only for fresh requests
         reasoning_mode = supervisor.classify_complexity(user_text, history_text)
     
-    if reasoning_mode == "tot":
+    if reasoning_mode == "tree_of_thought":
         logger.info("🧠 PLANNING: Multi-path exploration needed - using Tree-of-Thought reasoning...")
         branches, best = planner.run_tree_of_thought(user_text, history_text)
     else:

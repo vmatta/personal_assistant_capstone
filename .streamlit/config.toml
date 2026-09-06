@@ -1,0 +1,5 @@
+[server]
+# Disabled: transformers' lazy-loaded vision submodules (vilt, zoedepth, etc.)
+# unconditionally import torchvision (not a project dependency, not installed),
+# which the file watcher's module scan surfaces as harmless but noisy warnings.
+fileWatcherType = "none"

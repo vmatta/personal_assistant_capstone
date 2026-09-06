@@ -36,7 +36,7 @@ def run_evaluation() -> dict:
             {
                 "query": query["text"],
                 "expected_approval": query["expect_approval"],
-                "actual_approval_required": result.get("requires_human_approval"),
+                "actual_approval_required": result.get("approval_was_requested"),
                 "response": result["response"],
                 "latency_seconds": latency,
                 "qa_score": result.get("qa_score"),

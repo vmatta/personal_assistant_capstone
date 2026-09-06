@@ -59,6 +59,11 @@ _SYSTEM_PROMPT = (
     "Weather checking for outdoor events is AUTOMATIC and happens after scheduling, so do NOT make weather_external the target.\n"
     "2. If the request is ONLY about weather/forecast (no scheduling/saving), pick 'weather_external'.\n"
     "3. If the request asks to save/remember/note something, pick 'notes_knowledge'.\n"
+    "4. If the request is a QUESTION asking what the user wants/likes/prefers to do (e.g. 'what do I want "
+    "to do on a Sunday', 'what should I do this weekend', 'what's my preference for X') and does NOT contain "
+    "an explicit scheduling verb ('schedule', 'add', 'create', 'book'), this is a RETRIEVAL of a previously "
+    "stated preference/note, NOT a request to create a new scheduled event. Pick 'notes_knowledge' and never "
+    "invent or schedule an activity on the user's behalf just because a related preference exists in history.\n"
     "Score each candidate from 0.0 to 1.0 for how confidently it correctly and completely "
     "addresses the PRIMARY user intent (the main action verb).\n\n"
     'Respond ONLY with JSON of the form: {"candidates": [{"thought": "...", '
@@ -217,6 +222,16 @@ _DIRECT_SYSTEM_PROMPT = (
     "weekend and put something fun on my calendar'). Here 'if'/'whether' just means "
     "'find out whether', not a fork — treat the scheduling/notes verb as the PRIMARY user intent and "
     "pick that agent (scheduler_todo or notes_knowledge); weather is checked automatically afterward.\n"
+    "- QUESTION ABOUT A STORED PREFERENCE (route to notes_knowledge, NEVER schedule anything): if the "
+    "user asks what they want/like/prefer to do (e.g. 'what do I want to do on a Sunday', 'what should "
+    "I do this weekend') and does NOT use an explicit scheduling verb ('schedule', 'add', 'create', "
+    "'book'), this is a RETRIEVAL question about a previously stated preference/note. Pick "
+    "'notes_knowledge' to look up and answer from stored notes. NEVER invent, assume, or create a new "
+    "scheduled event just because a related preference exists in the conversation history. The 'thought' "
+    "you write for this case MUST describe LOOKING UP and ANSWERING the question from stored notes "
+    "(e.g. 'Search saved notes for the user's Sunday preference and answer the question') — it must NOT "
+    "use words like 'schedule', 'book', or 'create an event', since that would wrongly instruct the "
+    "downstream agent to fabricate a scheduling action it has no tool to perform.\n"
     'Respond ONLY with JSON: {"thought": "...", "target_agent": "..."}'
 )
 

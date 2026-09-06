@@ -92,7 +92,9 @@ def run_turn(
     log_event("turn_start", thread_id=thread_id, user_text=user_text)
     result = _invoke_with_timeout(build_turn_payload(user_text, config), config)
 
+    approval_was_requested = False
     while "__interrupt__" in result:
+        approval_was_requested = True
         interrupt_payload = result["__interrupt__"][0].value
         log_event("human_approval_requested", thread_id=thread_id, payload=interrupt_payload)
         answer = approval_prompt(
@@ -117,5 +119,9 @@ def run_turn(
         "latency_seconds": latency,
         "qa_score": result.get("qa_score"),
         "escalation_count": result.get("escalation_count"),
+        # Final graph state's flag: always False once approved (by design, so QA
+        # retries don't re-prompt). Use approval_was_requested to check whether the
+        # gate actually fired at any point during this turn.
         "requires_human_approval": result.get("requires_human_approval"),
+        "approval_was_requested": approval_was_requested,
     }

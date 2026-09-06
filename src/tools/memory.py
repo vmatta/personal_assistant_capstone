@@ -3,6 +3,7 @@ simple JSON-backed to-do/schedule store used by the Scheduler & To-Do agent.
 """
 
 import json
+import re
 import threading
 import time
 import uuid
@@ -94,8 +95,30 @@ def _get_collection(name: str):
     return _get_client().get_or_create_collection(name=name, embedding_function=_get_embedding_fn())
 
 
-def save_note(text: str) -> str:
-    """Persist a note and index it for semantic retrieval. Returns the note id."""
+def _normalize_note_text(text: str) -> str:
+    normalized = re.sub(r"[^\w\s]", " ", (text or "").casefold())
+    return " ".join(normalized.split())
+
+
+def save_note(text: str) -> Optional[str]:
+    """Persist a note and index it for semantic retrieval.
+
+    Returns the new note id if inserted, or None if the same note is already
+    present in the collection.
+    """
+    normalized = _normalize_note_text(text)
+    if normalized:
+        try:
+            existing = _get_collection(_NOTES_COLLECTION).get(include=["documents"])
+            for document in existing.get("documents") or []:
+                if _normalize_note_text(document) == normalized:
+                    return None
+        except Exception:
+            # Fall through to a normal save even if the lookup itself failed. This
+            # keeps the app resilient while preserving the duplicate guard in the
+            # common case of a valid persisted collection.
+            pass
+
     note_id = str(uuid.uuid4())
     _get_collection(_NOTES_COLLECTION).add(
         documents=[text], ids=[note_id], metadatas=[{"created_at": time.time()}]

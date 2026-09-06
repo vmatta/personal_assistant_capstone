@@ -38,18 +38,36 @@ _log_container_active = False
 
 
 class StreamlitLogHandler(logging.Handler):
-    """Custom logging handler that writes to Streamlit UI."""
+    """Custom logging handler that writes to Streamlit UI.
+
+    Streamlit widgets are tied to the active script context; background threads
+    (for example, timeouts or warm-up tasks) do not have a valid ScriptRunContext.
+    In that case we still accumulate the log line for later display, but we must
+    never call .write() on a Streamlit container from a non-main-thread context.
+    """
     def emit(self, record):
         global _log_container, _current_logs, _log_container_active
         try:
             msg = self.format(record)
-            # Always store in accumulator
+            # Always store in accumulator for later UI inspection.
             _current_logs.append(msg)
-            # Also write to container if active
+
+            # Guard against background-thread writes: only the main Streamlit script
+            # thread has a valid ScriptRunContext. If missing, skip UI writes.
+            try:
+                from streamlit.runtime.scriptrunner import get_script_run_ctx
+            except Exception:
+                get_script_run_ctx = None
+
+            script_ctx = get_script_run_ctx() if get_script_run_ctx is not None else None
+            if script_ctx is None:
+                return
+
             if _log_container_active and _log_container is not None:
                 _log_container.write(msg)
         except Exception:
-            # Silently fail if container no longer exists
+            # Silently fail if container no longer exists or a background thread
+            # calls into Streamlit without a script context.
             pass
 
 

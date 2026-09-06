@@ -72,22 +72,50 @@ python -m pip install --upgrade pip
 
 ### Python Version Setup
 
-**Recommended setup method:** If you use `pyenv`, the `.python-version` file in the root directory will automatically select Python 3.11.9 when you enter the project folder.
+This project requires **exactly Python 3.11.9** (the only version it has been
+tested on). If `python --version` above showed a different version (higher
+or lower), install 3.11.9 **alongside** your existing Python — you do not
+need to uninstall anything.
+
+**Windows:**
+
+```powershell
+py -0p   # lists every Python version the launcher can see, e.g. "-3.9-64", "-3.11-64"
+```
+
+If `3.11` is not listed, download and run the official installer:
+https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
+(uncheck "Add to PATH" if you don't want it to become your default `python`).
+
+Then create the venv with that specific version:
+
+```powershell
+py -3.11 -m venv .venv
+```
+
+**macOS/Linux with `pyenv` (recommended):** the `.python-version` file in the
+root directory auto-selects 3.11.9 once it's installed.
 
 ```bash
-# Using pyenv (recommended)
-pyenv install 3.11.9  # if not already installed
+pyenv install 3.11.9   # if not already installed
 cd personal_assistant_capstone  # .python-version auto-selects 3.11.9
-
-# Or manually specify Python version
-python3.11.9 -m venv .venv
+python -m venv .venv
 ```
+
+**macOS/Linux without `pyenv`:**
+
+```bash
+python3.11 -m venv .venv
+```
+
+Continue with the **Setup** steps below using whichever `.venv` you just created.
 
 ### Environment Validation (Optional)
 
-Before running the app, you can validate your environment:
+Before running the app, activate the venv and validate your environment:
 
 ```powershell
+.\.venv\Scripts\Activate.ps1
 python scripts/check_env.py
 ```
 
@@ -96,11 +124,17 @@ This will verify Python 3.11.9+ and pip 26.1.1+ are installed.
 ## Setup
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\pip install --upgrade pip  # Ensure pip 26.1.1+
 .\.venv\Scripts\pip install -r requirements.txt
-Copy-Item .env.example .env   # then fill in your API key
+Copy-Item example.env .env   # then fill in your API key
 ```
+
+> **Note:** `requirements.txt` is pinned to exact versions verified to install
+> cleanly together on Python 3.11.9. Installing it downloads several large
+> packages (`torch`, `chromadb`, `transformers`, etc.) — expect the full
+> install to use ~3-4 GB of disk space and take a few minutes. If `pip`
+> fails with `OSError: [Errno 28] No space left on device`, free up disk
+> space (check `Get-PSDrive C` for free space) and re-run the install.
 
 ### LLM Provider Configuration
 

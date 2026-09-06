@@ -25,6 +25,44 @@ def test_new_state_shape():
     assert state["final_response"] is None
 
 
+def test_conditional_followup_does_not_block_new_schedule_listing():
+    from src.graph import nodes
+
+    history = """
+    User: Schedule an outdoor picnic in Denver on Friday at 2 PM and check if the weather is suitable.
+    Assistant: Got it. I still need:
+    1. Fallback plan: if weather is not suitable, should I cancel, reschedule, or proceed anyway?
+    """
+
+    result = nodes._conditional_weather_followup_response("list all my scheduled events", history)
+
+    assert result is None
+
+
+def test_streamlit_log_handler_skips_ui_write_without_script_context(monkeypatch):
+    import logging
+
+    import streamlit_app
+
+    class FakeContainer:
+        def __init__(self):
+            self.calls = 0
+
+        def write(self, _message):
+            self.calls += 1
+
+    fake_container = FakeContainer()
+    streamlit_app._log_container = fake_container
+    streamlit_app._log_container_active = True
+    monkeypatch.setattr(streamlit_app, "get_script_run_ctx", lambda: None, raising=False)
+
+    handler = streamlit_app.StreamlitLogHandler()
+    record = logging.LogRecord(name="test", level=logging.INFO, pathname=__file__, lineno=1, msg="hello", args=(), exc_info=None)
+    handler.emit(record)
+
+    assert fake_container.calls == 0
+
+
 def test_route_after_plan_no_approval_needed():
     state = _state_with(requires_human_approval=False)
     assert route_after_plan(state) == "dispatch"

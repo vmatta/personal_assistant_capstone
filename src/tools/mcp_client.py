@@ -146,6 +146,8 @@ def complete_todo_tool(todo_id: str) -> str:
 def save_note_tool(text: str) -> str:
     """Save a note to long-term memory for later semantic retrieval."""
     note_id = memory.save_note(text)
+    if note_id is None:
+        return "This is already in there."
     return f"Saved note {note_id}."
 
 

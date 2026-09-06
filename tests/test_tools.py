@@ -25,6 +25,23 @@ def test_list_notes_returns_recent_notes(monkeypatch):
     assert memory.list_notes(limit=1) == ["newer note"]
 
 
+def test_save_note_duplicate_returns_none_and_tool_message_is_already_in_there(monkeypatch):
+    class _FakeCollection:
+        def __init__(self):
+            self.documents = ["Remember that I prefer to relax on Sundays."]
+
+        def get(self, include=None):
+            return {"documents": self.documents}
+
+        def add(self, documents=None, ids=None, metadatas=None):
+            raise AssertionError("duplicate notes should not be saved again")
+
+    monkeypatch.setattr(memory, "_get_collection", lambda name: _FakeCollection())
+
+    assert memory.save_note("remember that i prefer to relax on sundays") is None
+    assert mcp_client.save_note_tool.func("Remember that I prefer to relax on Sundays.") == "This is already in there."
+
+
 def test_add_list_complete_todo_roundtrip():
     item = memory.add_todo("buy milk", due="2030-01-01")
     assert item["done"] is False

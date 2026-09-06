@@ -1,5 +1,6 @@
 """Critic/QA gate and human-in-the-loop escalation logic (Guardrails 1-3)."""
 
+import logging
 import re
 from datetime import datetime, timedelta
 
@@ -10,6 +11,8 @@ from openai import APIConnectionError
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MAX_TOKENS, LLM_MODEL, SETTINGS, get_llm
 from src.graph.state import ReasoningMode, SubAgentResult
 from src.utils.helpers import invoke_with_retry, parse_json_response
+
+logger = logging.getLogger(__name__)
 
 _GUARDRAILS = SETTINGS.get("guardrails", {})
 QA_SCORE_THRESHOLD = _GUARDRAILS.get("qa_score_threshold", 0.85)
@@ -126,7 +129,7 @@ def classify_complexity(user_text: str, history_text: str = "") -> ReasoningMode
     or can be handled with a single direct plan.
 
     Returns "direct" for ~95% of requests (simple execution).
-    Returns "tot" for ~5% of requests (true multi-path exploration needed).
+    Returns "tree_of_thought" for ~5% of requests (true multi-path exploration needed).
     
     CRITICAL: Retries ALWAYS use direct path (never escalate to ToT).
     """
@@ -165,7 +168,7 @@ def classify_complexity(user_text: str, history_text: str = "") -> ReasoningMode
         )
     )
     if has_exploration_phrase and has_multi_constraint_signal:
-        return "tot"
+        return "tree_of_thought"
 
     # Deterministic direct-path fast rules for routine assistant intents.
     direct_verbs = [
@@ -180,7 +183,6 @@ def classify_complexity(user_text: str, history_text: str = "") -> ReasoningMode
         "remember",
         "what is",
         "what's",
-        "weather",
     ]
     domain_nouns = [
         "task",
@@ -200,14 +202,14 @@ def classify_complexity(user_text: str, history_text: str = "") -> ReasoningMode
 
     context = f"{history_text}\n\n{user_text}" if history_text else user_text
     messages = [SystemMessage(content=_COMPLEXITY_SYSTEM_PROMPT), HumanMessage(content=context)]
-    response = invoke_with_retry(get_llm(), messages)
     try:
+        response = invoke_with_retry(get_llm(), messages)
         data = parse_json_response(response.content)
         complexity = data.get("complexity", "simple").lower()
-        return "tot" if complexity == "complex" else "direct"
-    except (ValueError, AttributeError, TypeError):
-        logger.warning("Could not classify complexity; defaulting to 'direct'")
-        return "direct"
+        return "tree_of_thought" if complexity == "complex" else "direct"
+    except Exception:
+        logger.warning("Could not classify complexity; failing safe to 'tree_of_thought'")
+        return "tree_of_thought"
 
 
 _CRITIC_SYSTEM_PROMPT = (
@@ -233,6 +235,15 @@ _CRITIC_SYSTEM_PROMPT = (
     "For requests to list, show, or summarize stored tasks/events, treat an answer as complete if it "
     "reports the matching stored items using the available description and due time; do not penalize "
     "generic stored titles, UUID omission, or ISO-like due timestamps unless they make the answer wrong. "
+    "**ZERO-MATCH DELETE/CANCEL RULE**: If the user's request is to DELETE, CANCEL, or REMOVE items, and the "
+    "agent's response states that no matching items were found (e.g. 'Deleted 0 tasks: no tasks were found'), "
+    "this IS a correct, complete response as long as it clearly reports the zero-result outcome. "
+    "Do NOT penalize it for lacking extra acknowledgment/reassurance phrasing — reporting the true outcome "
+    "(nothing matched) is itself the acknowledgment. Score HIGHLY (0.85+). "
+    "Examples:\n"
+    "  ✅ User: 'Cancel my event for tomorrow' → Agent: 'Deleted 0 tasks: no tasks were found for tomorrow.' → Score 0.9\n"
+    "  ❌ Do not score this low merely for 'lacking acknowledgment of the cancel request' — stating the "
+    "true zero-result outcome already acknowledges and answers the request.\n"
     "For TIME-FILTERED list queries like 'this week', 'this month', 'today', 'next week': if the agent "
     "returns items that fall within the requested time window with dates shown, score HIGHLY (0.85+). "
     "Do NOT penalize dates for appearing 'too far in the future' relative to your training data—the system "
