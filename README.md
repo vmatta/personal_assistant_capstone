@@ -49,6 +49,21 @@ User -> plan (ToT) -> [human_approval?] -> dispatch (CrewAI) -> critic (QA gate)
                                                                     |-- fail, retries exhausted -> escalate -> User
 ```
 
+## Requirements
+
+**Python 3.11.9** is required. This project uses Python 3.11.9 features and has been tested exclusively on this version.
+
+**Recommended setup method:** If you use `pyenv`, the `.python-version` file in the root directory will automatically select Python 3.11.9 when you enter the project folder.
+
+```bash
+# Using pyenv (recommended)
+pyenv install 3.11.9  # if not already installed
+cd personal_assistant_capstone  # .python-version auto-selects 3.11.9
+
+# Or manually specify Python version
+python3.11.9 -m venv .venv
+```
+
 ## Setup
 
 ```powershell

@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personal-assistant-capstone"
+version = "1.0.0"
+description = "An agentic personal assistant with transparent multi-agent orchestration, Tree-of-Thought reasoning, and QA guardrails"
+authors = [
+    {name = "Vijay Kumar Matta", email = "vijaymatta@gmail.com"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11.9"
+keywords = ["agent", "LLM", "LangGraph", "CrewAI", "multi-agent", "orchestration"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.11.9",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Core Frameworks & Graph Orchestration
+    "langgraph>=0.2.60",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "crewai>=0.80.0",
+    
+    # Vector Database & Embeddings
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    
+    # Configuration, Serialization & Environment
+    "pydantic>=2.8.0",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.1",
+    "streamlit>=1.38.0",
+    
+    # HTTP & MCP Protocol Client Utilities
+    "requests>=2.32.0",
+    "httpx>=0.27.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vmatta/personal-assistant-capstone"
+Documentation = "https://github.com/vmatta/personal-assistant-capstone/blob/main/README.md"
+Repository = "https://github.com/vmatta/personal-assistant-capstone.git"
+Issues = "https://github.com/vmatta/personal-assistant-capstone/issues"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+target_version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
