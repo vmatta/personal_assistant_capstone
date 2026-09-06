@@ -1,0 +1,71 @@
+# ==============================================================================
+# Personal Assistant System Configuration
+# ==============================================================================
+
+llm:
+  # Active provider choice: "openai", "openrouter", or "local"
+  provider: "openrouter"
+  
+  # Configuration when provider is "local"
+  local:
+    model: "Qwen/Qwen3-1.7B"  # HuggingFace model ID (will use cached version)
+    device: "cpu"  # or "cuda" if GPU available
+  
+  # Configuration when provider is "openrouter"
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    model: "openai/gpt-4o-mini"
+    
+  # Configuration when provider is "openai"
+  openai:
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o-mini"
+    
+  temperature: 0.2
+  max_tokens: 900
+
+tree_of_thought:
+  branching_factor: 2      # Number of candidate branches per step (was: 1, now: 2)
+  beam_width: 2            # Top paths kept during search (was: 1, now: 2)
+  max_depth: 2             # Maximum search depth (was: 1, now: 2)
+  prune_threshold: 0.50    # Minimum score required to avoid pruning
+
+vector_db:
+  persist_directory: "data/chromadb"
+  embedding_model: "all-MiniLM-L6-v2"
+  collections:
+    notes: "user_personal_notes"
+    knowledge_base: "document_knowledge"
+
+harness:
+  max_system_steps: 4      # Hard loop guardrail against infinite execution (reduced from 6)
+  step_timeout_seconds: 15 # Timeout limit per tool execution (reduced from 30)
+  debug_mode: true
+
+guardrails:
+  max_retries: 3                 # Guardrail 1: agent harness retry cap before escalation (matches FINAL-DESIGN.png)
+  qa_score_threshold: 0.85        # Guardrail 2: Critic/QA gate pass score (matches FINAL-DESIGN.png).
+                                   # Deterministic fast-paths (list queries, clarification detection, weekday/time
+                                   # confirmations, itinerary/optimization responses) all return >= 0.85, so this
+                                   # threshold does not penalize legitimate clarifying questions.
+  human_approval_actions:         # Guardrail 3: actions requiring explicit user approval
+    - "delete_note"
+    - "cancel_event"
+    - "delete_event"
+    - "remove_event"
+    - "send_message"
+    - "clean_up"
+    - "clean_all"
+    - "remove_all"
+    - "delete_all"
+    - "delete_task"
+    - "complete_all"
+    - "clear"
+  ambiguity_escalation_turns: 2   # Escalate to user after N unresolved clarification rounds
+
+evaluation:
+  metrics:
+    - "action_correctness"
+    - "system_latency"
+    - "groundedness_hallucination"
+    - "escalation_rate"
