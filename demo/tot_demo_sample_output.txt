@@ -1,0 +1,128 @@
+Sample captured output from demo/tot_demo_presentation.py
+(reference transcript for slides/screenshots - actual live run will regenerate
+fresh timestamps, dates, and possibly slightly different LLM phrasing)
+
+####################################################################################################
+# ToT Demo 1: Constraint-Satisfaction Scheduling
+####################################################################################################
+
+USER: I need to schedule 3 meetings: one that needs 2 hours, one that needs 1 hour, and one that needs 30 minutes. They can't overlap and I'm only available Tuesday-Thursday 9-5. Find the best way to schedule all three.
+
+----------------------------------------------------------------------------------------------------
+[console trace during run]
+  PLANNING: Multi-path exploration needed - using Tree-of-Thought reasoning...
+  PLANNING: Starting Tree-of-Thought reasoning...
+     Depth 0: Generated 2 candidate(s)
+       Candidate 1: scheduler_todo (confidence: 0.90)
+         Thought: Schedule the 2-hour meeting first on Tuesday from 9 AM to 11 AM, the 1-hour
+         meeting on Tuesday from 11 AM to 12 PM, and the 30-minute meeting on Tuesday from 12 PM
+         to 12:30 PM. This utilizes the available time on Tuesday efficiently.
+       Candidate 2: scheduler_todo (confidence: 0.80)
+         Thought: Schedule the 2-hour meeting on Tuesday from 9 AM to 11 AM, the 1-hour meeting
+         on Wednesday from 9 AM to 10 AM, and the 30-minute meeting on Wednesday from 10 AM to
+         10:30 AM. This allows for meetings on two different days without overlap.
+     Confident solution found at depth 0
+     SELECTED: scheduler_todo (confidence: 0.90)
+  DISPATCHING: Sending task to scheduler_todo agent...
+     scheduler_todo completed
+  QA SCORING: Evaluating agent response...
+     Score: 0.90/1.0 | Feedback: Exploratory optimization request answered with a substantive
+     multi-step response
+  COMPOSING: Building final response...
+     Response ready
+----------------------------------------------------------------------------------------------------
+
+[REASONING MODE: TOT]  [ELAPSED: ~9-10s]  [QA SCORE: 0.9]
+
+[CANDIDATE BRANCHES GENERATED: 2]
+  Branch 1 [SURVIVED] (confidence: 0.90) -> agent=scheduler_todo
+      Schedule the 2-hour meeting first on Tuesday from 9 AM to 11 AM, the 1-hour meeting on
+      Tuesday from 11 AM to 12 PM, and the 30-minute meeting on Tuesday from 12 PM to 12:30 PM.
+      This utilizes the available time on Tuesday efficiently.
+  Branch 2 [SURVIVED] (confidence: 0.80) -> agent=scheduler_todo
+      Schedule the 2-hour meeting on Tuesday from 9 AM to 11 AM, the 1-hour meeting on Wednesday
+      from 9 AM to 10 AM, and the 30-minute meeting on Wednesday from 10 AM to 10:30 AM. This
+      allows for meetings on two different days without overlap.
+
+[FINAL ASSISTANT RESPONSE]
+Confirmed: 2-hour meeting at [date]T09:00:00
+Confirmed: 1-hour meeting at [date]T11:00:00
+Confirmed: 30-minute meeting at [date]T12:00:00
+
+
+####################################################################################################
+# ToT Demo 2: Multi-Constraint Itinerary Exploration
+####################################################################################################
+
+USER: Plan my weekend: I want to visit 3 different cities, stay under 4 hours driving, and include both indoor and outdoor activities. Show me different ways to organize this.
+
+----------------------------------------------------------------------------------------------------
+[console trace during run]
+  PLANNING: Multi-path exploration needed - using Tree-of-Thought reasoning...
+  PLANNING: Starting Tree-of-Thought reasoning...
+     Depth 0: Generated 2 candidate(s)
+       Candidate 1: scheduler_todo (confidence: 0.90)
+         Thought: Plan a weekend trip visiting three cities within a 4-hour driving radius,
+         including a mix of indoor and outdoor activities.
+       Candidate 2: scheduler_todo (confidence: 0.90)
+         Thought: Create a detailed itinerary for a weekend trip to three cities, ensuring a
+         balance of indoor and outdoor activities while adhering to the driving limit.
+     Confident solution found at depth 0
+     SELECTED: scheduler_todo (confidence: 0.90)
+     Exploratory itinerary request detected; normalizing target to notes_knowledge
+  DISPATCHING: Sending task to notes_knowledge agent...
+     notes_knowledge completed
+  QA SCORING: Evaluating agent response...
+     Score: 0.90/1.0 | Feedback: Exploratory itinerary response provided multiple structured
+     options as requested
+  COMPOSING: Building final response...
+     Response ready
+----------------------------------------------------------------------------------------------------
+
+[REASONING MODE: TOT]  [ELAPSED: ~7-11s]  [QA SCORE: 0.9]
+
+[CANDIDATE BRANCHES GENERATED: 2]
+  Branch 1 [SURVIVED] (confidence: 0.90) -> agent=notes_knowledge
+      Provide 2-4 alternative weekend plans that satisfy the user's constraints, with short
+      trade-offs and a recommendation.
+  Branch 2 [SURVIVED] (confidence: 0.90) -> agent=scheduler_todo
+      Create a detailed itinerary for a weekend trip to three cities, ensuring a balance of
+      indoor and outdoor activities while adhering to the driving limit.
+
+[FINAL ASSISTANT RESPONSE]
+Here are four alternative weekend plans for visiting three different cities within a 4-hour
+driving radius, including both indoor and outdoor activities:
+
+### Plan 1: Hudson Valley Adventure
+- Cities: Beacon, Cold Spring, Poughkeepsie
+- Activities: Dia:Beacon museum (indoor) + Mount Beacon hike (outdoor); waterfront stroll
+  (outdoor); Walkway Over the Hudson (outdoor) + FDR Presidential Library (indoor)
+- Trade-offs: Great mix of art, history, and nature; some driving back and forth.
+
+### Plan 2: Coastal Getaway
+- Cities: Asbury Park, Long Branch, Red Bank
+- Activities: beach/boardwalk (outdoor) + Stone Pony (indoor); Pier Village (outdoor); Count
+  Basie Center (indoor) + Navesink River walk (outdoor)
+- Trade-offs: Great for beach lovers; may be crowded on weekends.
+
+### Plan 3: Historic Cities Tour
+- Cities: Philadelphia, Princeton, New Brunswick
+- Activities: Liberty Bell/Independence Hall (indoor) + Fairmount Park (outdoor); Princeton
+  campus (outdoor) + art museum (indoor); State Theatre (indoor) + Raritan River walk (outdoor)
+- Trade-offs: Rich in history/culture; more urban driving.
+
+### Plan 4: Nature and Culture Combo
+- Cities: Catskill, Kingston, Woodstock
+- Activities: Catskill Mountains hike (outdoor) + art galleries (indoor); historic waterfront +
+  maritime museum (indoor); outdoor scenery + Woodstock Artists museum (indoor)
+- Trade-offs: Peaceful nature retreat; limited dining options.
+
+### Recommendation
+Plan 1: Hudson Valley Adventure is recommended for its balance of art, history, and outdoor
+activities, making it suitable for a diverse range of interests while keeping travel times
+manageable.
+
+
+####################################################################################################
+# END OF DEMO
+####################################################################################################

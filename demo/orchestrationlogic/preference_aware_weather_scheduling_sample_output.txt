@@ -1,0 +1,84 @@
+Sample captured output from
+demo/orchestrationlogic/preference_aware_weather_scheduling_presentation.py
+(reference transcript for slides/screenshots - actual live run will regenerate
+fresh timestamps, dates, and possibly slightly different LLM phrasing)
+
+This demonstrates NEW orchestration logic added to the system:
+  - src/graph/nodes.py::_weather_permitting_multi_day_response()
+  - src/graph/nodes.py::_detect_multi_day_candidates()
+  - src/graph/nodes.py::_day_exclusion_preference()  (queries saved notes/RAG)
+  - src/graph/nodes.py::_is_weather_suitable_for_outdoor()
+  - src/tools/external.py::get_daily_forecast()  (NEW: future-date forecast,
+    not just "current weather")
+
+####################################################################################################
+# Edge Case: No location given (system asks instead of guessing)
+####################################################################################################
+
+USER: If weather permits can you schedule an outdoor Saturday or Sunday
+
+[ELAPSED: ~0.0s]
+
+[FINAL RESPONSE]
+I can check the weather for both days, but I need a location first. Which city
+should I check the forecast for?
+
+  (Design note: the system deliberately asks rather than assuming a default
+   city - consistent with the rest of the codebase's "never guess a specific
+   detail; ask" philosophy already used for weather_external elsewhere.)
+
+
+####################################################################################################
+# Main Demo Turn 1: Preference rules out Sunday, weather confirms Saturday
+####################################################################################################
+
+USER: If weather permits can you schedule an outdoor activity in New York City
+on Saturday or Sunday
+
+[console trace during run]
+   Multi-day weather-permitting request detected: candidates=['saturday', 'sunday'], location=New York City
+      X Sunday ruled out by saved preference: 'Preference: On Sundays, I only relax at home.'
+      / Saturday (2026-09-05) forecast: overcast, 28.1C max, 0.0mm precip -> suitable
+
+[ELAPSED: ~4-20s]
+
+[FINAL RESPONSE]
+- Sunday: ruled out based on your saved preference (Preference: On Sundays, I
+  only relax at home.)
+- Saturday (2026-09-05): overcast, 28.1C max, 0.0mm precipitation, wind up to
+  20.9 km/h - suitable for an outdoor activity
+
+Recommendation: schedule the outdoor activity for Saturday. What time would
+you like?
+
+
+####################################################################################################
+# Main Demo Turn 2: Follow-up with a time -> actually books the event
+####################################################################################################
+
+USER: Saturday at 2 PM
+
+(same conversation thread as Turn 1 - this is a normal follow-up that falls
+ through to the regular scheduler_todo agent once a day+time are both known)
+
+[ELAPSED: ~9s]
+
+[FINAL RESPONSE]
+Confirmed: Outdoor activity in New York City at 2026-09-05T14:00:00.
+
+
+####################################################################################################
+# END OF DEMO
+####################################################################################################
+
+WHAT TO HIGHLIGHT LIVE:
+1. The system checked saved preferences (long-term memory / RAG) BEFORE checking
+   weather at all - Sunday was eliminated on preference grounds alone.
+2. The weather check used the ACTUAL forecast for a specific FUTURE date
+   (Saturday's date), not just "what's the weather right now" - a new
+   get_daily_forecast() capability using Open-Meteo's daily/date-range API.
+3. The final recommendation is decisive (not another round of clarifying
+   questions), and a natural follow-up completes the booking.
+4. Contrast with the edge case: if no location is given, the system asks
+   instead of silently assuming a city - an explicit, testable guardrail
+   against hallucinated defaults.

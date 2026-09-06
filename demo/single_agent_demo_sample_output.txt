@@ -1,0 +1,109 @@
+Sample captured output from demo/single_agent_demo_presentation.py
+(reference transcript for slides/screenshots - actual live run will regenerate
+fresh timestamps, dates, and possibly slightly different LLM phrasing)
+
+####################################################################################################
+# scheduler_todo Demo 1: Schedule an appointment
+####################################################################################################
+
+USER: Schedule a dentist appointment on Tuesday at 3 PM.
+
+[ELAPSED: ~6-7s]  [QA SCORE: 0.92]
+[AGENT DISPATCHED: ['scheduler_todo']]
+
+[FINAL RESPONSE]
+Confirmed: Dentist appointment at [date]T15:00:00.
+
+
+####################################################################################################
+# scheduler_todo Demo 2: List events for today
+####################################################################################################
+
+USER: Show me all my scheduled events for today.
+
+[ELAPSED: ~3s]  [QA SCORE: 0.95]
+[AGENT DISPATCHED: ['scheduler_todo']]
+
+[FINAL RESPONSE]
+Here are your tasks for today, [date]:
+
+- [task 1] at [time]
+- [task 2] at [time]
+...
+
+
+####################################################################################################
+# notes_knowledge Demo 1: Save a preference
+####################################################################################################
+
+USER: Save that my favorite hobby is painting.
+
+[ELAPSED: ~16s]  [QA SCORE: 1.0]
+[AGENT DISPATCHED: ['notes_knowledge']]
+
+[FINAL RESPONSE]
+Your note has been saved: "My favorite hobby is painting."
+
+
+####################################################################################################
+# notes_knowledge Demo 2: Query the saved preference
+####################################################################################################
+
+USER: What is my favorite hobby?
+
+(same conversation thread as Demo 1, so retrieval is properly grounded in the note
+ this exact demo run just saved)
+
+[ELAPSED: ~3s]  [QA SCORE: 1.0]
+[AGENT DISPATCHED: ['notes_knowledge']]
+
+[FINAL RESPONSE]
+Your favorite hobby is painting.
+
+
+####################################################################################################
+# weather_external Demo 1: Current weather
+####################################################################################################
+
+USER: What's the current weather in Pittsburgh?
+
+[ELAPSED: ~7s]  [QA SCORE: 0.9]
+[AGENT DISPATCHED: ['weather_external']]
+
+[FINAL RESPONSE]
+The current weather in Pittsburgh is clear sky with a temperature of 32.7C. The
+humidity is at 47%, there has been no precipitation, and the wind is blowing at
+14.5 km/h.
+
+
+####################################################################################################
+# weather_external Demo 2: Current temperature
+####################################################################################################
+
+USER: What's the temperature in Miami right now?
+
+[ELAPSED: ~7-8s]  [QA SCORE: 0.9]
+[AGENT DISPATCHED: ['weather_external']]
+
+[FINAL RESPONSE]
+The current temperature in Miami is 28.7C with overcast skies. The humidity is at
+82%, and there is no precipitation. The wind is blowing at 4.9 km/h.
+
+
+####################################################################################################
+# END OF DEMO
+####################################################################################################
+
+REJECTED CANDIDATES (tested, not reliable enough for a live demo):
+
+1. "List all my tasks for this week" (as a scheduler_todo demo)
+   -> Occasionally misroutes to notes_knowledge instead of scheduler_todo due to the
+      word "list" alone not being a strong enough routing signal. Use "Show me all my
+      scheduled events for today" instead, which reliably routes to scheduler_todo.
+
+2. "What is my favorite color?" run on a FRESH/unrelated thread (as a notes_knowledge demo)
+   -> The vector store persists across the whole process/session, so a fresh thread's
+      query can retrieve a stale note saved by an EARLIER unrelated test run in the same
+      session, which then confuses the QA critic (it scored this 0.0 - "unsupported
+      assumption" - because it has no visibility into retrieval evidence, only the final
+      text). Always chain a "save" + "query" pair on the SAME thread_id for a demo.

@@ -1,0 +1,91 @@
+Sample captured output from demo/multiagent_demo_presentation.py
+(reference transcript for slides/screenshots - actual live run will regenerate
+fresh timestamps, dates, and possibly slightly different LLM phrasing)
+
+####################################################################################################
+# Multi-Agent Demo 1: Schedule + Weather (scheduler_todo -> weather_external)
+####################################################################################################
+
+USER: Schedule an outdoor picnic in Denver on Friday at 2 PM, and check if the weather will be
+suitable for an outdoor event.
+
+----------------------------------------------------------------------------------------------------
+[console trace during run]
+  PLANNING: Simple/Direct reasoning (routine task)...
+     SELECTED: scheduler_todo
+  DISPATCHING: Sending task to scheduler_todo agent...
+     scheduler_todo completed
+     Multi-agent scenario detected: scheduler_todo, weather_external
+     Also dispatching weather_external agent...
+     weather_external completed
+  QA SCORING: Evaluating multi-agent response...
+     Score: 0.92/1.0 | Feedback: Scheduling confirmation matches requested weekday and time.
+  COMPOSING: Building final response...
+     Combining 2 agent results...
+     Response ready
+----------------------------------------------------------------------------------------------------
+
+[ELAPSED: ~10-18s]  [QA SCORE: 0.92]
+
+[AGENTS DISPATCHED: 2]
+  Agent 1: scheduler_todo  (success=True)
+      output: Confirmed: Outdoor picnic in Denver at [date]T14:00:00.
+  Agent 2: weather_external  (success=True)
+      output: The current weather in Denver, Colorado is overcast with a temperature of 31.8C.
+      The humidity is at 19%, and there is no precipitation expected. Wind is blowing at 14.8
+      km/h. Overall, the weather seems suitable for an outdoor picnic.
+
+[FINAL COMPOSED RESPONSE]
+Confirmed: Outdoor picnic in Denver at [date]T14:00:00.
+
+The current weather in Denver, Colorado is overcast with a temperature of 31.8C. The humidity
+is at 19%, and there is no precipitation expected. Wind is blowing at 14.8 km/h. Overall, the
+weather seems suitable for an outdoor picnic.
+
+
+####################################################################################################
+# Multi-Agent Demo 2: Schedule + Save Note (scheduler_todo -> notes_knowledge)
+####################################################################################################
+
+USER: Schedule volleyball in Miami on Saturday at 4 PM and save it as my favorite sport.
+
+----------------------------------------------------------------------------------------------------
+[console trace during run]
+  PLANNING: Simple/Direct reasoning (routine task)...
+     SELECTED: scheduler_todo
+  DISPATCHING: Sending task to scheduler_todo agent...
+     scheduler_todo completed
+     Multi-agent scenario detected: scheduler_todo, notes_knowledge
+     Also dispatching notes_knowledge agent...
+     notes_knowledge completed
+  QA SCORING: Evaluating multi-agent response...
+     Score: 0.92/1.0 | Feedback: Scheduling confirmation matches requested weekday and time.
+  COMPOSING: Building final response...
+     Combining 2 agent results...
+     Response ready
+----------------------------------------------------------------------------------------------------
+
+[ELAPSED: ~5-18s]  [QA SCORE: 0.92]
+
+[AGENTS DISPATCHED: 2]
+  Agent 1: scheduler_todo  (success=True)
+      output: Confirmed: Volleyball - favorite sport at [date]T16:00:00.
+  Agent 2: notes_knowledge  (success=True)
+      output: The note has been saved: "Favorite sport: volleyball."
+
+[FINAL COMPOSED RESPONSE]
+Confirmed: Volleyball - favorite sport at [date]T16:00:00.
+
+The note has been saved: "Favorite sport: volleyball."
+
+
+####################################################################################################
+# END OF DEMO
+####################################################################################################
+
+REJECTED CANDIDATE (tested, not reliable enough for live demo):
+  "Save a note that my project deadline is next month, then schedule a reminder meeting
+  for September 15th at 10 AM to prepare for it."
+  -> Reliably scored QA 0.1 across repeated runs due to a genuine date-ambiguity
+     contradiction ("next month" vs. the resolved concrete date), triggering QA retries
+     and ending in escalation ~35-50s later. Avoid this prompt pattern for demos.
