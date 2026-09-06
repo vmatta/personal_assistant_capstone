@@ -13,6 +13,7 @@ pydantic>=2.8.0
 pyyaml>=6.0.1
 python-dotenv>=1.0.1
 streamlit>=1.38.0
+packaging>=24.0.0
 
 # HTTP & MCP Protocol Client Utilities
 requests>=2.32.0

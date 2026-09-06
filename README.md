@@ -51,7 +51,26 @@ User -> plan (ToT) -> [human_approval?] -> dispatch (CrewAI) -> critic (QA gate)
 
 ## Requirements
 
-**Python 3.11.9** is required. This project uses Python 3.11.9 features and has been tested exclusively on this version.
+**Python 3.11.9** and **pip 26.1.1+** are required.
+
+This project uses Python 3.11.9 features and pip 26.1.1+ dependency resolution. It has been tested exclusively on these versions.
+
+### Check Your Versions
+
+```powershell
+python --version   # Should show 3.11.9
+pip --version      # Should show 26.1.1 or higher
+```
+
+### Upgrade pip if needed
+
+If you have an older pip version, upgrade it:
+
+```powershell
+python -m pip install --upgrade pip
+```
+
+### Python Version Setup
 
 **Recommended setup method:** If you use `pyenv`, the `.python-version` file in the root directory will automatically select Python 3.11.9 when you enter the project folder.
 
@@ -64,10 +83,21 @@ cd personal_assistant_capstone  # .python-version auto-selects 3.11.9
 python3.11.9 -m venv .venv
 ```
 
+### Environment Validation (Optional)
+
+Before running the app, you can validate your environment:
+
+```powershell
+python scripts/check_env.py
+```
+
+This will verify Python 3.11.9+ and pip 26.1.1+ are installed.
+
 ## Setup
 
 ```powershell
 python -m venv .venv
+.\.venv\Scripts\pip install --upgrade pip  # Ensure pip 26.1.1+
 .\.venv\Scripts\pip install -r requirements.txt
 Copy-Item .env.example .env   # then fill in your API key
 ```

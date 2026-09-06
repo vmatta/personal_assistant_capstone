@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel", "pip>=26.1.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,6 +39,7 @@ dependencies = [
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "streamlit>=1.38.0",
+    "packaging>=24.0.0",  # For environment validation (check_env.py)
     
     # HTTP & MCP Protocol Client Utilities
     "requests>=2.32.0",
