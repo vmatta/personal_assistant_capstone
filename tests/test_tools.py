@@ -84,6 +84,38 @@ def test_add_todo_tool_rejects_existing_open_time_conflict():
     assert len(memory.list_todos()) == 1
 
 
+def test_add_todo_tool_reschedules_overlapping_meetings_to_next_available_slot():
+    memory.add_todo("2-hour meeting", due="2026-09-08T09:00:00")
+
+    result = mcp_client.add_todo_tool.func("1-hour meeting", due="2026-09-08T10:00:00")
+
+    assert "2026-09-08T11:00:00" in result
+    stored = memory.list_todos()
+    assert any(t["description"] == "1-hour meeting" and t["due"].startswith("2026-09-08T11:00:00") for t in stored)
+    assert len(stored) == 2
+
+    third = mcp_client.add_todo_tool.func("30-minute meeting", due="2026-09-08T12:00:00")
+    stored_after = memory.list_todos()
+    assert any(
+        t["description"] == "30-minute meeting" and t["due"].startswith("2026-09-08T12:00:00")
+        for t in stored_after
+    ) or any(
+        t["description"] == "30-minute meeting" and t["due"].startswith("2026-09-08T12:30:00")
+        for t in stored_after
+    )
+    assert len(stored_after) == 3
+
+
+def test_add_todo_tool_does_not_duplicate_identical_open_booking():
+    item = memory.add_todo("2-hour meeting", due="2026-09-08T09:00:00")
+
+    result = mcp_client.add_todo_tool.func("  2-HOUR   meeting ", due="2026-09-08T09:00:00")
+
+    assert result.startswith("Already scheduled:")
+    assert len(memory.list_todos()) == 1
+    assert memory.list_todos()[0]["id"] == item["id"]
+
+
 def test_list_todos_tool_formats_due_time():
     item = memory.add_todo("standup", due="2030-01-01T15:30:00Z")
 

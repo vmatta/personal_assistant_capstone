@@ -2,7 +2,8 @@
 receives the specific tools registered in its scope, never the full toolset.
 """
 
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from crewai.tools import tool
@@ -34,6 +35,93 @@ def _extract_day_of_week(due: str | None) -> str | None:
         return due_dt.strftime("%A")
     except ValueError:
         return None
+
+
+def _parse_due_datetime(due: str | None) -> datetime | None:
+    """Parse ISO-style due values as Eastern Time when timezone info is absent."""
+    if not due:
+        return None
+    try:
+        due_dt = datetime.fromisoformat(due.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if due_dt.tzinfo is None:
+        due_dt = due_dt.replace(tzinfo=USER_TIMEZONE)
+    return due_dt.astimezone(USER_TIMEZONE)
+
+
+def _duration_minutes_from_description(description: str) -> int | None:
+    """Return an explicit duration in minutes from text like '2 hours' or '30 minutes'."""
+    text = (description or "").lower()
+    patterns = [
+        (r"(\d+)\s*(?:-|\s+)?hours?", 60),
+        (r"(\d+)\s*(?:-|\s+)?hrs?", 60),
+        (r"(\d+)\s*(?:-|\s+)?minutes?", 1),
+        (r"(\d+)\s*(?:-|\s+)?mins?", 1),
+        (r"(\d+)\s*(?:-|\s+)?hr", 60),
+        (r"(\d+)\s*(?:-|\s+)?min", 1),
+    ]
+    for pattern, multiplier in patterns:
+        match = re.search(pattern, text)
+        if match:
+            value = int(match.group(1))
+            return value * multiplier
+    return None
+
+
+def _events_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
+    """True when two [start, end) windows overlap."""
+    return start_a < end_b and start_b < end_a
+
+
+def _normalized_description(description: str) -> str:
+    """Normalize descriptions for idempotent repeated scheduling requests."""
+    return " ".join((description or "").casefold().split())
+
+
+def _same_due_datetime(stored_due: str | None, requested_due: datetime | None) -> bool:
+    """Compare a stored due value with a parsed requested datetime."""
+    stored_dt = _parse_due_datetime(stored_due)
+    return stored_dt is not None and requested_due is not None and stored_dt == requested_due
+
+
+def _find_next_available_slot(start_dt: datetime, duration_minutes: int, existing_todos: list[dict]) -> datetime | None:
+    """Find the earliest non-overlapping slot on or after start_dt within a standard working day."""
+    candidate = start_dt.replace(second=0, microsecond=0)
+    end_of_day = start_dt.replace(hour=17, minute=0, second=0, microsecond=0)
+    day_limit = start_dt + timedelta(days=7)
+
+    while candidate < day_limit:
+        if candidate.hour < 9 or candidate.hour >= 17:
+            candidate = candidate.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            continue
+        slot_end = candidate + timedelta(minutes=duration_minutes)
+        if slot_end > end_of_day:
+            candidate = candidate.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            continue
+
+        overlap = False
+        for todo in existing_todos:
+            due = todo.get("due")
+            if not due:
+                continue
+            item_dt = _parse_due_datetime(due)
+            if not item_dt:
+                continue
+            if item_dt.date() != candidate.date():
+                continue
+
+            item_duration = _duration_minutes_from_description(todo.get("description", "")) or 60
+            item_end = item_dt + timedelta(minutes=item_duration)
+            if _events_overlap(candidate, slot_end, item_dt, item_end):
+                overlap = True
+                candidate = item_end
+                break
+
+        if not overlap:
+            return candidate
+
+    return None
 
 
 def _check_preference_conflicts(description: str, due: str | None, day_of_week: str | None) -> dict | None:
@@ -107,11 +195,50 @@ def add_todo_tool(description: str, due: str = "") -> str:
     
     Returns a clarification question if preference conflict detected.
     """
-    # Check for time-based conflicts (existing to-dos at same time)
+    due_dt = _parse_due_datetime(due)
+    open_todos = memory.list_todos(include_done=False)
+
+    # Repeating the same scheduling request should confirm the existing item,
+    # not create another booking or trigger conflict-based rescheduling.
+    normalized_description = _normalized_description(description)
+    for todo in open_todos:
+        if (
+            normalized_description
+            and _normalized_description(todo.get("description", "")) == normalized_description
+            and _same_due_datetime(todo.get("due"), due_dt)
+        ):
+            return f"Already scheduled: {todo['description']} for {todo.get('due')}."
+
+    # Exact same-time conflicts remain a hard block; the user requested a specific slot
+    # that is already occupied and should not be silently moved.
     conflicts = memory.find_open_todos_at_due(due or None)
     if conflicts:
         existing = "; ".join(f"{item['description']} (id: {item['id']}, due: {item['due']})" for item in conflicts)
         return f"Cannot add this item because you already have an open item at that time: {existing}."
+
+    # Overlap with a different time window: move to the next free slot within the same day.
+    if due_dt is not None:
+        requested_duration = _duration_minutes_from_description(description) or 60
+        requested_end = due_dt + timedelta(minutes=requested_duration)
+        for todo in open_todos:
+            other_due = _parse_due_datetime(todo.get("due"))
+            if not other_due:
+                continue
+            other_duration = _duration_minutes_from_description(todo.get("description", "")) or 60
+            other_end = other_due + timedelta(minutes=other_duration)
+            if _events_overlap(due_dt, requested_end, other_due, other_end):
+                next_slot = _find_next_available_slot(due_dt, requested_duration, open_todos)
+                if next_slot is None:
+                    return (
+                        f"Cannot add this item because it overlaps with your existing schedule: "
+                        f"{todo['description']} ({todo.get('due')})."
+                    )
+                item = memory.add_todo(description, next_slot.isoformat())
+                return (
+                    f"Scheduled: {description} for {next_slot.isoformat()} "
+                    f"(the original {due_dt.isoformat()} slot overlapped with an existing meeting)."
+                )
+
     
     # Check for preference conflicts (e.g., "I relax on Sundays")
     day_of_week = _extract_day_of_week(due or None)
