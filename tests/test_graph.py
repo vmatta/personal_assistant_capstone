@@ -253,6 +253,63 @@ def test_classify_complexity_fails_safe_to_tree_of_thought(monkeypatch):
     assert supervisor.classify_complexity("anything") == "tree_of_thought"
 
 
+def test_dispatch_node_delete_all_reports_full_pre_dispatch_scope(monkeypatch, tmp_path):
+    """Regression: the agent completing some matching to-dos itself (but only mentioning
+    a subset in its own text) must not shrink the reported scope. The verification must
+    use a snapshot taken BEFORE dispatch, not a re-query of open items AFTER dispatch,
+    otherwise items the agent already handled silently vanish from the final report."""
+    from src.agents import executor
+    from src.graph import nodes
+    from src.tools import memory
+
+    monkeypatch.setattr(memory, "_TODO_STORE_PATH", tmp_path / "todos.json")
+
+    item_a = memory.add_todo("1-hour meeting", due="2026-09-08T11:00:00")
+    item_b = memory.add_todo("Outdoor picnic in Denver", due="2026-09-11T14:00:00")
+    item_c = memory.add_todo("Outdoor activity", due="2026-09-12T14:00:00")
+
+    def fake_dispatch(agent_name, task_description):
+        # Simulate the agent completing 2 of the 3 matching to-dos itself, but only
+        # mentioning 1 of them in its own summary text (the exact bug reported).
+        memory.complete_todo(item_a["id"])
+        memory.complete_todo(item_c["id"])
+        return {
+            "agent": agent_name,
+            "output": f"Deleted 1 task(s): {item_c['description']} (due: {item_c['due']})",
+            "tool_calls": [],
+            "success": True,
+            "error": None,
+        }
+
+    monkeypatch.setattr(executor, "dispatch", fake_dispatch)
+    monkeypatch.setattr(nodes.planner, "detect_multi_agent_dispatch", lambda user_text: [])
+
+    branch = ThoughtBranch(
+        node_id="cancel-all",
+        parent_id=None,
+        depth=0,
+        thought="cancel all scheduled events",
+        target_agent="scheduler_todo",
+        score=1.0,
+        pruned=False,
+    )
+    state = _state_with(
+        messages=new_state("cancel all my scheduled events")["messages"],
+        thoughts=[branch],
+        selected_branch_id=branch["node_id"],
+        human_decision="approved",
+    )
+
+    result = nodes.dispatch_node(state)
+
+    output = result["subagent_results"][0]["output"]
+    assert output.startswith("Deleted 3 task(s):")
+    assert item_a["description"] in output
+    assert item_b["description"] in output
+    assert item_c["description"] in output
+    assert memory.list_todos(include_done=False) == []
+
+
 def test_score_result_includes_history_for_followup_qa(monkeypatch):
     captured = {}
 
@@ -339,6 +396,22 @@ def test_run_direct_out_of_scope_is_accepted(monkeypatch):
     )
     branches, best = planner.run_direct("what is 2+2?")
     assert best["target_agent"] == planner.OUT_OF_SCOPE
+
+
+def test_run_direct_overrides_misrouted_list_query_to_scheduler(monkeypatch):
+    """Regression: 'list all scheduled events' was misrouted to notes_knowledge, which
+    searches saved notes (finds nothing) instead of calling list_todos, producing
+    "I couldn't find any scheduled events in your saved notes" even when open to-dos exist."""
+    from src.agents import planner
+
+    monkeypatch.setattr(
+        "src.agents.planner.invoke_with_retry",
+        lambda llm, messages: _FakeResponse(
+            '{"thought": "look up scheduled events in notes", "target_agent": "notes_knowledge"}'
+        ),
+    )
+    branches, best = planner.run_direct("list all scheduled events")
+    assert best["target_agent"] == "scheduler_todo"
 
 
 def test_plan_node_out_of_scope_skips_dispatch(monkeypatch):

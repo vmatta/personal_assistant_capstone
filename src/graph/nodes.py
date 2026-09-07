@@ -1021,7 +1021,38 @@ def _plan_node_impl(state: AssistantState) -> dict:
     }
 
 
-def _verify_and_heal_delete_action(state: AssistantState, user_text: str, result: SubAgentResult) -> SubAgentResult:
+def _resolve_should_be_deleted_snapshot(state: AssistantState, user_text: str) -> list[dict] | None:
+    """Snapshot exactly which currently-open to-dos match the user's delete/cancel scope.
+
+    MUST be called BEFORE dispatching the agent. Computing this snapshot after dispatch
+    (against memory.list_todos at that later point) would silently exclude any items the
+    agent already completed during its run, undercounting the ground-truth scope and
+    causing the post-action verification below to under-report what was actually deleted.
+    """
+    if state.get("human_decision") != "approved":
+        return None
+    from src.agents.supervisor import is_destructive_action_request
+    if not is_destructive_action_request(user_text.lower()):
+        return None
+
+    from src.tools import memory
+
+    now = datetime.now(context.USER_TIMEZONE)
+    scope = context.resolve_delete_scope(user_text, now)
+    open_todos = memory.list_todos(include_done=False)
+    if scope["kind"] == "day":
+        target_dates = set(scope["dates"])
+        return [t for t in open_todos if (t.get("due") or "")[:10] in target_dates]
+    if scope["kind"] == "all":
+        return list(open_todos)
+    # Unscoped delete with no "all" marker: agent may have legitimately asked a
+    # clarifying question instead of deleting anything — nothing to verify here.
+    return None
+
+
+def _verify_and_heal_delete_action(
+    should_be_deleted: list[dict] | None, result: SubAgentResult
+) -> SubAgentResult:
     """Post-action ground-truth check for already-approved delete/cleanup actions
     (Guardrail: verification, not trust).
 
@@ -1033,40 +1064,20 @@ def _verify_and_heal_delete_action(state: AssistantState, user_text: str, result
     cross-check that text against what was actually persisted to data/todos.json,
     so a confidently-wrong "success" report can sail through the QA gate untouched.
 
-    This function recomputes, independently of the agent's LLM call, exactly which
-    to-do IDs SHOULD now be marked done given the delete scope resolved from the
-    user's own words (context.resolve_delete_scope — the same helper used to build
-    the agent's task instructions, so scope can never disagree between the two).
-    If any of those items are still open after the agent "finished", this function
-    finishes the job directly via memory.complete_todo (deterministic, no LLM call)
-    and rewrites the result's output text to accurately reflect the real final
-    state, instead of letting the agent's inflated claim reach the user unchecked.
+    `should_be_deleted` is the PRE-dispatch snapshot from _resolve_should_be_deleted_snapshot,
+    so it reflects the full original scope regardless of how much the agent already handled.
+    If any of those items are still open after the agent "finished", this function finishes
+    the job directly via memory.complete_todo (deterministic, no LLM call) and rewrites the
+    result's output text to accurately reflect the real final state — reporting the FULL
+    original scope, not just the subset that needed healing.
     """
-    if state.get("human_decision") != "approved":
-        return result
-    from src.agents.supervisor import is_destructive_action_request
-    if not is_destructive_action_request(user_text.lower()):
+    if not should_be_deleted:
         return result
 
     from src.tools import memory
 
-    now = datetime.now(context.USER_TIMEZONE)
-    scope = context.resolve_delete_scope(user_text, now)
-    open_todos = memory.list_todos(include_done=False)
-    if scope["kind"] == "day":
-        target_dates = set(scope["dates"])
-        should_be_deleted = [t for t in open_todos if (t.get("due") or "")[:10] in target_dates]
-    elif scope["kind"] == "all":
-        should_be_deleted = list(open_todos)
-    else:
-        # Unscoped delete with no "all" marker: agent may have legitimately asked a
-        # clarifying question instead of deleting anything — nothing to verify here.
-        return result
-
-    if not should_be_deleted:
-        return result
-
-    still_open = [t for t in should_be_deleted if not t["done"]]
+    still_open_ids = {t["id"] for t in memory.list_todos(include_done=False)}
+    still_open = [t for t in should_be_deleted if t["id"] in still_open_ids]
     if not still_open:
         return result
 
@@ -1074,10 +1085,8 @@ def _verify_and_heal_delete_action(state: AssistantState, user_text: str, result
         f"   ⚠️ VERIFICATION: agent reported completion but {len(still_open)}/{len(should_be_deleted)} "
         f"matching task(s) are still open — self-healing by completing them directly."
     )
-    healed_descriptions = []
     for todo in still_open:
         memory.complete_todo(todo["id"])
-        healed_descriptions.append(f"{todo['description']} (due: {todo.get('due')})")
 
     all_deleted_descriptions = [f"{t['description']} (due: {t.get('due')})" for t in should_be_deleted]
     corrected_output = (
@@ -1110,12 +1119,18 @@ def dispatch_node(state: AssistantState) -> dict:
     
     results = []
     
+    # Ground-truth snapshot of what SHOULD be deleted, captured BEFORE dispatch so the
+    # agent's own tool calls can't shrink this set out from under the post-action check.
+    should_be_deleted_snapshot = None
+    if branch.get("target_agent") == "scheduler_todo":
+        should_be_deleted_snapshot = _resolve_should_be_deleted_snapshot(state, user_text)
+
     # Primary agent dispatch (from planner selection)
     logger.info(f"📤 DISPATCHING: Sending task to {branch['target_agent']} agent...")
     result = executor.dispatch(branch["target_agent"], task_description)
     logger.info(f"   ✓ {branch['target_agent']} completed")
     if branch.get("target_agent") == "scheduler_todo":
-        result = _verify_and_heal_delete_action(state, user_text, result)
+        result = _verify_and_heal_delete_action(should_be_deleted_snapshot, result)
     results.append(result)
     
     # Sequential multi-agent dispatch: detect if we need additional agents
@@ -1129,10 +1144,13 @@ def dispatch_node(state: AssistantState) -> dict:
             if secondary_agent != primary_agent:
                 logger.info(f"   📤 Also dispatching {secondary_agent} agent...")
                 secondary_task = context.build_task_description(state, {"target_agent": secondary_agent})
+                secondary_snapshot = None
+                if secondary_agent == "scheduler_todo":
+                    secondary_snapshot = _resolve_should_be_deleted_snapshot(state, user_text)
                 secondary_result = executor.dispatch(secondary_agent, secondary_task)
                 logger.info(f"      ✓ {secondary_agent} completed")
                 if secondary_agent == "scheduler_todo":
-                    secondary_result = _verify_and_heal_delete_action(state, user_text, secondary_result)
+                    secondary_result = _verify_and_heal_delete_action(secondary_snapshot, secondary_result)
                 results.append(secondary_result)
     
     return {

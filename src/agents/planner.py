@@ -106,6 +106,26 @@ def _heuristic_target_agent(user_text: str) -> str:
     return OUT_OF_SCOPE
 
 
+def _is_schedule_list_query(text_lower: str) -> bool:
+    """True for requests to list/show scheduled tasks/events/todos (never notes/preferences).
+
+    Without this, the direct-path LLM can occasionally misclassify a plain list request
+    (e.g. "list all scheduled events") as notes_knowledge, which then searches saved notes
+    (finding nothing) instead of calling list_todos, producing a confusing "I couldn't find
+    any scheduled events in your saved notes" reply even when open to-dos exist.
+    """
+    list_verbs = ("list", "show", "get all", "what are", "tell me", "which", "view")
+    schedule_nouns = (
+        "task", "tasks", "todo", "todos", "event", "events", "item", "items",
+        "schedule", "scheduled", "meeting", "meetings", "appointment", "appointments",
+    )
+    note_nouns = ("note", "notes", "preference", "preferences", "favorite", "favorites")
+    has_list_verb = any(v in text_lower for v in list_verbs)
+    has_schedule_noun = any(n in text_lower for n in schedule_nouns)
+    has_note_noun = any(n in text_lower for n in note_nouns)
+    return has_list_verb and has_schedule_noun and not has_note_noun
+
+
 def _heuristic_candidates(user_text: str) -> list[dict]:
     text = (user_text or "").lower()
     target = _heuristic_target_agent(user_text)
@@ -434,6 +454,16 @@ def run_direct(user_text: str, history_text: str = "") -> tuple[list[ThoughtBran
             )
             target_agent = heuristic_agent
             thought = f"Handle the user request with {target_agent}."
+
+    # SAFETY NET: same idea, but for list/show requests about tasks/events/todos being
+    # misrouted to notes_knowledge instead of scheduler_todo (see _is_schedule_list_query).
+    if target_agent != "scheduler_todo" and _is_schedule_list_query(text_lower):
+        logger.info(
+            f"   ⚠ Direct planner said '{target_agent}' for a schedule list/show request; "
+            "overriding to 'scheduler_todo' so it calls list_todos instead of searching notes."
+        )
+        target_agent = "scheduler_todo"
+        thought = "List the user's scheduled tasks/events by calling list_todos."
 
     branch = ThoughtBranch(
         node_id=str(uuid.uuid4()),

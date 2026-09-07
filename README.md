@@ -62,14 +62,6 @@ python --version   # Should show 3.11.9
 pip --version      # Should show 26.1.1 or higher
 ```
 
-### Upgrade pip if needed
-
-If you have an older pip version, upgrade it:
-
-```powershell
-python -m pip install --upgrade pip
-```
-
 ### Python Version Setup
 
 This project requires **exactly Python 3.11.9** (the only version it has been
@@ -121,12 +113,14 @@ python scripts/check_env.py
 
 This will verify Python 3.11.9+ and pip 26.1.1+ are installed.
 
-## Setup
+## Setup Instructions
 
 ```powershell
 .\.venv\Scripts\pip install --upgrade pip  # Ensure pip 26.1.1+
+
 .\.venv\Scripts\pip install -r requirements.txt
-Copy-Item example.env .env   # then fill in your API key
+
+Copy-Item example.env .env   # then fill .env with your API key for OPENROUTER_API_KEY
 ```
 
 > **Note:** `requirements.txt` is pinned to exact versions verified to install
@@ -171,7 +165,7 @@ Choose your LLM provider and configure both `.env` and `config/settings.yaml`:
        model: "gpt-4o-mini"  # or another OpenAI model
    ```
 
-## Usage
+## Usage/ Start APP
 
 **Start the Streamlit UI** (opens at http://localhost:8501):
 (Might take few seconds to load. Loads chromaDb in background for few seconds after)

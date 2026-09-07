@@ -6,10 +6,10 @@ llm:
   # Active provider choice: "openai", "openrouter", or "local"
   provider: "openrouter"
   
-  # Configuration when provider is "local"
-  local:
-    model: "Qwen/Qwen3-1.7B"  # HuggingFace model ID (will use cached version)
-    device: "cpu"  # or "cuda" if GPU available
+  # # Configuration when provider is "local"
+  # local:
+  #   model: "Qwen/Qwen3-1.7B"  # HuggingFace model ID (will use cached version)
+  #   device: "cpu"  # or "cuda" if GPU available
   
   # Configuration when provider is "openrouter"
   openrouter:
